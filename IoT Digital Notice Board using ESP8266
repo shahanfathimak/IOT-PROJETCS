@@ -1,0 +1,173 @@
+🔹 Objective
+
+In this project, we will build an IoT Digital Notice Board using an ESP8266 and an OLED/LCD display.
+The system allows teachers or students to send messages from their phone or PC via Wi-Fi, and the messages will be displayed on the notice board.
+
+🔹 Real-Life Application
+
+Schools & colleges → display announcements
+
+Offices → display meeting updates
+
+Shops/businesses → display offers
+
+Homes → display reminders
+
+🔹 Components Required
+Component	Quantity
+ESP8266 (NodeMCU/Wemos D1 Mini)	1
+OLED Display (SSD1306, 128×64) OR LCD 16x2 with I2C	1
+Jumper wires	As required
+Breadboard	1
+USB cable	1
+🔹 Circuit Connection (OLED SSD1306)
+OLED Pin	ESP8266 Pin
+VCC	3.3V
+GND	GND
+SDA	D2 (GPIO4)
+SCL	D1 (GPIO5)
+
+(If you use LCD 16x2 with I2C, wiring is the same: SDA → D2, SCL → D1)
+
+🔹 Working Principle
+
+ESP8266 connects to Wi-Fi.
+
+ESP8266 creates a webpage.
+
+You open the ESP8266’s IP address in a browser (Chrome, Edge, Firefox).
+
+Type a message in the webpage → press Send.
+
+ESP8266 receives the message and displays it on the OLED/LCD.
+
+🔹 Arduino Code
+****************************************************************************************************************************************
+
+#include <ESP8266WiFi.h>
+#include <ESP8266WebServer.h>
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
+// ------- OLED Setup -------
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
+
+// ------- Wi-Fi Credentials -------
+const char* ssid = "YOUR_WIFI_SSID";       // 🔹 Enter your Wi-Fi SSID
+const char* password = "YOUR_WIFI_PASSWORD"; // 🔹 Enter your Wi-Fi Password
+
+// ------- Web Server -------
+ESP8266WebServer server(80);
+String message = "Welcome!";
+
+void handleRoot() {
+  String html = "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Digital Notice Board</title>";
+  html += "<style>body{font-family:Arial;text-align:center;background:#f0f0f0;}";
+  html += "h2{color:#333;}input[type=text]{width:80%;padding:10px;font-size:18px;}";
+  html += "button{padding:10px 20px;margin-top:10px;font-size:16px;}</style></head><body>";
+  html += "<h2>ESP8266 Digital Notice Board</h2>";
+  html += "<form action='/send' method='GET'>";
+  html += "<input type='text' name='msg' placeholder='Enter message here'><br>";
+  html += "<button type='submit'>Send to Display</button>";
+  html += "</form>";
+  html += "<p><b>Current Message:</b><br>" + message + "</p>";
+  html += "</body></html>";
+
+  server.send(200, "text/html", html);
+}
+
+void handleSend() {
+  if (server.hasArg("msg")) {
+    message = server.arg("msg");
+    // Display on OLED
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setTextColor(SSD1306_WHITE);
+    display.setCursor(0, 10);
+    display.println(message);
+    display.display();
+  }
+  handleRoot();
+}
+
+void setup() {
+  Serial.begin(115200);
+
+  // Start OLED
+  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+    Serial.println(F("SSD1306 allocation failed"));
+    for (;;);
+  }
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0, 10);
+  display.println("Connecting WiFi...");
+  display.display();
+
+  // Wi-Fi
+  WiFi.begin(ssid, password);
+  Serial.print("Connecting to WiFi");
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("\nConnected!");
+  Serial.print("IP Address: ");
+  Serial.println(WiFi.localIP());
+
+  display.clearDisplay();
+  display.setCursor(0, 10);
+  display.println("WiFi Connected!");
+  display.println(WiFi.localIP());
+  display.display();
+
+  // Web server routes
+  server.on("/", handleRoot);
+  server.on("/send", handleSend);
+  server.begin();
+  Serial.println("Web server started");
+}
+
+void loop() {
+  server.handleClient();
+}
+
+*******************************************************************************************************************************************8
+🔹 Steps for Students
+
+Upload the code to ESP8266 (don’t forget to edit Wi-Fi SSID & Password).
+
+Open Serial Monitor → Note the IP address.
+
+Open Chrome → Type:
+
+http://<your_IP_address>
+
+
+Example: http://192.168.1.45
+
+Enter a message → Press Send.
+
+Message will instantly show on the OLED/LCD screen.
+
+🔹 Output Example
+
+Webpage shows:
+"ESP8266 Digital Notice Board"
+with a textbox + Send button.
+
+When you type "Good Morning Students" → It will appear on the OLED/LCD screen.
+
+🔹 Key Learning
+
+Students learn IoT concepts (ESP8266 + Wi-Fi).
+
+How to host a webpage on ESP8266.
+
+Sending & receiving data between browser and hardware.
+
+Displaying data on a hardware screen (OLED/LCD).
