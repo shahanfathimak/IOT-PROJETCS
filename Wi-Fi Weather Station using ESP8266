@@ -1,0 +1,113 @@
+🔹 Aim
+
+To build a Weather Station using ESP8266 and DHT11/DHT22 sensor that shows Temperature and Humidity on a webpage using Wi-Fi.
+
+🔹 Components Required
+
+ESP8266 (NodeMCU / Wemos D1 Mini) – 1
+
+DHT11 or DHT22 Sensor – 1
+
+Breadboard – 1
+
+Jumper wires – few
+
+USB cable – 1
+
+🔹 Circuit Connections
+
+DHT VCC → ESP8266 3.3V
+
+DHT GND → ESP8266 GND
+
+DHT Data → ESP8266 D4 (GPIO2)
+
+🔹 Working Principle
+
+The DHT sensor measures temperature and humidity.
+
+The ESP8266 connects to Wi-Fi and creates a web server.
+
+The data is displayed on a webpage, which can be viewed on any phone or computer connected to the same Wi-Fi.
+🔹 Full Arduino Code
+*********************************************************************************************************************************
+#include <ESP8266WiFi.h>
+#include "DHT.h"
+
+#define DHTPIN D4        // Pin connected to DHT sensor
+#define DHTTYPE DHT11    // Use DHT22 if using that sensor
+
+DHT dht(DHTPIN, DHTTYPE);
+
+const char* ssid = "YOUR_WIFI_SSID";      // Replace with your Wi-Fi name
+const char* password = "YOUR_WIFI_PASS";  // Replace with your Wi-Fi password
+
+WiFiServer server(80);
+
+void setup() {
+  Serial.begin(115200);
+  dht.begin();
+
+  // Connect to Wi-Fi
+  WiFi.begin(ssid, password);
+  Serial.print("Connecting to Wi-Fi");
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("\nConnected!");
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP()); // This IP will be used in browser
+
+  server.begin();
+}
+
+void loop() {
+  WiFiClient client = server.available();
+  if (!client) return;
+
+  while (!client.available()) delay(1);
+
+  client.readStringUntil('\r');  // Read HTTP request
+  client.flush();
+
+  float h = dht.readHumidity();
+  float t = dht.readTemperature();
+
+  // Build webpage
+  String html = "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Weather Station</title>";
+  html += "<style>body{font-family:Arial;text-align:center;background:#eef;}h1{color:#333;}p{font-size:22px;}</style>";
+  html += "</head><body>";
+  html += "<h1>🌦 ESP8266 Weather Station</h1>";
+  html += "<p><b>Temperature:</b> " + String(t) + " °C</p>";
+  html += "<p><b>Humidity:</b> " + String(h) + " %</p>";
+  html += "</body></html>";
+
+  // Send response
+  client.println("HTTP/1.1 200 OK");
+  client.println("Content-type:text/html");
+  client.println();
+  client.println(html);
+  client.stop();
+}
+****************************************************************************************************************************************
+🔹 How to Run
+
+Upload the code to ESP8266.
+
+Open Serial Monitor → Note the IP address (example: 192.168.1.45).
+
+Open Chrome/Browser → Type:
+
+http://192.168.1.45
+
+
+The webpage will show Temperature and Humidity.
+
+🔹 Result
+
+The webpage displays:
+
+Temperature (°C)
+
+Humidity (%)
