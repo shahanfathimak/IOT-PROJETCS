@@ -1,0 +1,188 @@
+#include <SPI.h>
+#include <MFRC522.h>
+#include <ESP8266WiFi.h>
+
+// ---------------- PIN DEFINITIONS ----------------
+#define SS_PIN     D4
+#define RST_PIN    D3
+#define BUZZER_PIN D8
+
+MFRC522 rfid(SS_PIN, RST_PIN);
+
+// ---------------- WIFI DETAILS ----------------
+const char* ssid = "SMART";
+const char* password = "Smart@1234";
+
+WiFiServer server(80);
+
+// ---------------- STRUCTURES ----------------
+struct Record {
+  String uid;
+  String name;
+  String className;
+  String division;
+  String time;
+};
+
+struct Student {
+  String uid;
+  String name;
+  String className;
+  String division;
+};
+
+// ---------------- DATA STORAGE ----------------
+Record records[50];
+int recordCount = 0;
+
+Student students[] = {
+  {"06B57660", "JANNAH SIDDHIQ", "7", "A"},
+  {"945AF405", "AMMARA E S",     "7", "A"},
+  {"665B9560", "SWABIR",         "7", "A"},
+  {"D3F81B06", "FATHIMA K M",    "7", "A"}
+};
+
+const int studentCount = sizeof(students) / sizeof(students[0]);
+
+// ---------------- TIME FUNCTION ----------------
+String getCurrentTime() {
+  unsigned long s = millis() / 1000;
+  int h = (s / 3600) % 24;
+  int m = (s / 60) % 60;
+  int sec = s % 60;
+
+  return String(h) + ":" +
+         (m < 10 ? "0" : "") + String(m) + ":" +
+         (sec < 10 ? "0" : "") + String(sec);
+}
+
+// ---------------- FIND STUDENT ----------------
+Student* findStudentByUID(String uid) {
+  for (int i = 0; i < studentCount; i++) {
+    if (students[i].uid.equalsIgnoreCase(uid))
+      return &students[i];
+  }
+  return nullptr;
+}
+
+// ---------------- DUPLICATE CHECK ----------------
+bool isUIDAlreadyRecorded(String uid) {
+  for (int i = 0; i < recordCount; i++) {
+    if (records[i].uid.equalsIgnoreCase(uid))
+      return true;
+  }
+  return false;
+}
+
+// ---------------- SETUP ----------------
+void setup() {
+  Serial.begin(115200);
+  SPI.begin();
+  rfid.PCD_Init();
+
+  pinMode(BUZZER_PIN, OUTPUT);
+  digitalWrite(BUZZER_PIN, LOW);
+
+  Serial.println("RC522 Initialized");
+
+  WiFi.begin(ssid, password);
+  Serial.print("Connecting to WiFi");
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+
+  Serial.println("\nConnected to WiFi");
+  Serial.print("IP Address: ");
+  Serial.println(WiFi.localIP());
+
+  server.begin();
+}
+
+// ---------------- LOOP ----------------
+void loop() {
+
+  // -------- RFID SCAN WITH BUZZER --------
+  if (rfid.PICC_IsNewCardPresent()) {
+
+    digitalWrite(BUZZER_PIN, HIGH);  // 🔔 BUZZER ON WHILE READING
+
+    if (rfid.PICC_ReadCardSerial()) {
+
+      String uid = "";
+      for (byte i = 0; i < rfid.uid.size; i++) {
+        uid += (rfid.uid.uidByte[i] < 0x10 ? "0" : "");
+        uid += String(rfid.uid.uidByte[i], HEX);
+      }
+      uid.toUpperCase();
+
+      Serial.println("Card UID: " + uid);
+
+      if (!isUIDAlreadyRecorded(uid)) {
+        Student* student = findStudentByUID(uid);
+
+        if (student != nullptr && recordCount < 50) {
+          records[recordCount].uid = uid;
+          records[recordCount].name = student->name;
+          records[recordCount].className = student->className;
+          records[recordCount].division = student->division;
+          records[recordCount].time = getCurrentTime();
+          recordCount++;
+
+          Serial.println("Attendance Marked: " + student->name);
+        } else {
+          Serial.println("Unknown Card");
+        }
+      } else {
+        Serial.println("Duplicate Entry");
+      }
+
+      rfid.PICC_HaltA();
+    }
+
+    digitalWrite(BUZZER_PIN, LOW);   // 🔕 BUZZER OFF AFTER READING
+    delay(500);
+  }
+
+  // -------- WEB SERVER --------
+  WiFiClient client = server.available();
+  if (!client) return;
+  while (!client.available()) delay(1);
+
+  client.println("HTTP/1.1 200 OK");
+  client.println("Content-Type: text/html");
+  client.println("Connection: close");
+  client.println();
+
+  client.println("<!DOCTYPE html><html><head>");
+  client.println("<meta charset='UTF-8'>");
+  client.println("<meta http-equiv='refresh' content='2'>");
+  client.println("<meta name='viewport' content='width=device-width, initial-scale=1.0'>");
+  client.println("<title>Smart Attendance</title>");
+
+  client.println("<style>");
+  client.println("body{font-family:Arial;background:#eef2f7;margin:0}");
+  client.println("header{background:#1E88E5;color:white;padding:20px;text-align:center;font-size:1.5rem}");
+  client.println("table{width:100%;border-collapse:collapse;margin-top:20px}");
+  client.println("th,td{padding:10px;text-align:center;border:1px solid #ccc}");
+  client.println("th{background:#1E88E5;color:white}");
+  client.println("</style></head><body>");
+
+  client.println("<header>SMART ATTENDANCE SYSTEM</header>");
+  client.println("<table>");
+  client.println("<tr><th>Name</th><th>Class</th><th>Division</th><th>UID</th><th>Time</th></tr>");
+
+  for (int i = recordCount - 1; i >= 0; i--) {
+    client.println("<tr><td>" + records[i].name +
+                   "</td><td>" + records[i].className +
+                   "</td><td>" + records[i].division +
+                   "</td><td>" + records[i].uid +
+                   "</td><td>" + records[i].time +
+                   "</td></tr>");
+  }
+
+  client.println("</table>");
+  client.println("<p style='text-align:center;margin-top:20px'>Developed by <b>PEACE PUBLIC SCHOOL</b></p>");
+  client.println("</body></html>");
+}
